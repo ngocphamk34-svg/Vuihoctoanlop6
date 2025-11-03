@@ -1,0 +1,284 @@
+
+
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<title>Tính Nhanh 6</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+body{font-family:"Segoe UI",Arial;background:linear-gradient(135deg,#dbeafe,#f0f9ff);margin:0;padding:0;}
+.container{max-width:720px;margin:20px auto;background:#fff;border-radius:16px;padding:20px;
+box-shadow:0 4px 10px rgba(0,0,0,0.15);}
+h1{text-align:center;color:#0077cc;margin-bottom:10px;}
+select,input,button{padding:8px;border-radius:8px;border:1px solid #ccc;margin:4px;}
+button{background:#0077cc;color:white;cursor:pointer;transition:0.2s;}
+button:hover{background:#005fa3;transform:scale(1.03);}
+.card{margin-top:10px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fafafa;}
+#leaderboard table{width:100%;border-collapse:collapse;}
+#leaderboard th,#leaderboard td{border:1px solid #ddd;padding:6px;text-align:center;}
+#feedback{font-weight:bold;margin-top:8px;}
+#hintText{color:#555;font-style:italic;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🧮 Tính Nhanh 6</h1>
+
+<audio id="soundCorrect" preload="auto">
+  <source src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg" type="audio/ogg">
+</audio>
+<audio id="soundWrong" preload="auto">
+  <source src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" type="audio/ogg">
+</audio>
+
+<div id="loginArea" class="card">
+  <h3>Nhập tên học sinh để bắt đầu</h3>
+  <input id="studentName" placeholder="Ví dụ: Nguyễn Minh Anh" />
+  <button id="startBtn">Bắt đầu</button>
+</div>
+
+<div id="mainArea" style="display:none;">
+  <div class="card">
+    <label>Chủ đề:
+      <select id="topic">
+        <option value="int">Số nguyên</option>
+        <option value="fraction">Phân số</option>
+        <option value="percent">Phần trăm</option>
+        <option value="expr">Biểu thức</option>
+      </select>
+    </label>
+    <label>Độ khó:
+      <select id="level">
+        <option value="1">Dễ</option>
+        <option value="2">Trung bình</option>
+        <option value="3">Khó</option>
+      </select>
+    </label>
+    <button id="gen">Luyện tập</button>
+    <button id="startTest">Thi nhanh 5 câu</button>
+  </div>
+
+  <div id="problemArea" class="card" style="display:none;">
+    <div id="qText" style="font-size:18px;margin-bottom:6px;"></div>
+    <input id="answer" placeholder="Nhập đáp án" />
+    <button id="check">Kiểm tra</button>
+    <button id="hintBtn">Gợi ý</button>
+    <div id="feedback"></div>
+    <div id="hintText"></div>
+  </div>
+
+  <div id="testArea" class="card" style="display:none;">
+    <h3>Thi nhanh: <span id="qn">0</span>/5 ⏱ <span id="timer">--</span>s</h3>
+    <div id="testQ" style="font-size:18px;margin-bottom:8px;"></div>
+    <input id="testAns" placeholder="Đáp án" />
+    <button id="nextQ">Trả lời</button>
+    <div id="testFeedback" style="margin-top:10px;"></div>
+  </div>
+
+  <div id="leaderboard" class="card">
+    <h3>🏆 Bảng xếp hạng</h3>
+    <table>
+      <thead><tr><th>Học sinh</th><th>Điểm cao nhất</th><th>Ngày</th></tr></thead>
+      <tbody id="rankBody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<script>
+let user="";
+const correctSound=document.getElementById("soundCorrect");
+const wrongSound=document.getElementById("soundWrong");
+
+// ==== GIỌNG NÓI ====
+function speak(text){
+  if(!('speechSynthesis'in window))return;
+  text=text
+    .replace(/×/g," nhân ")
+    .replace(/÷/g," chia ")
+    .replace(/\+/g," cộng ")
+    .replace(/-/g," trừ ")
+    .replace(/\(/g," mở ngoặc ")
+    .replace(/\)/g," đóng ngoặc ")
+    .replace(/\b-([0-9]+)/g," âm $1");
+  const voices=speechSynthesis.getVoices();
+  let vi=voices.find(v=>v.lang.startsWith("vi"));
+  const ut=new SpeechSynthesisUtterance(text);
+  ut.lang=vi?vi.lang:"vi-VN";
+  if(vi)ut.voice=vi;
+  speechSynthesis.speak(ut);
+}
+window.speechSynthesis.onvoiceschanged=()=>{};
+
+// ==== SINH BÀI TOÁN CHUẨN LỚP 6 ====
+function randInt(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
+
+function formatInt(n){
+  if(n<0) return `(${n})`;
+  return `${n}`;
+}
+
+function genProblem(topic,level){
+  if(topic==='int'){ // số nguyên có âm
+    let a=randInt(-20*level,20*level);
+    let b=randInt(-20*level,20*level);
+    let ops=['+','-','×','÷'];
+    let op=ops[randInt(0,3)];
+    if(op==='÷'){b=randInt(1,10*level);}
+    let ans;
+    switch(op){
+      case '+':ans=a+b;break;
+      case '-':ans=a-b;break;
+      case '×':ans=a*b;break;
+      case '÷':ans=parseFloat((a/b).toFixed(2));break;
+    }
+    return{q:`${formatInt(a)} ${op} ${formatInt(b)} = ?`,a:ans,hint:"Áp dụng quy tắc cộng, trừ, nhân, chia số nguyên"};
+  }
+
+  if(topic==='fraction'){
+    let a=randInt(1,9),b=randInt(2,9),c=randInt(1,9),d=randInt(2,9);
+    let op=['+','-','×','÷'][randInt(0,3)];
+    let ans;
+    switch(op){
+      case '+':ans=parseFloat((a/b + c/d).toFixed(2));break;
+      case '-':ans=parseFloat((a/b - c/d).toFixed(2));break;
+      case '×':ans=parseFloat((a/b * c/d).toFixed(2));break;
+      case '÷':ans=parseFloat((a/b / (c/d)).toFixed(2));break;
+    }
+    return{q:`${a}/${b} ${op} ${c}/${d} = ?`,a:ans,hint:"Quy đồng hoặc nhân chia phân số"};
+  }
+
+  if(topic==='percent'){
+    let p=randInt(10,90);
+    let n=randInt(50,500);
+    return{q:`${p}% của ${n} là bao nhiêu?`,a:parseFloat((p/100*n).toFixed(2)),hint:"Nhân phần trăm với số đó"};
+  }
+
+  if(topic==='expr'){
+    let a=randInt(-10,10),b=randInt(-10,10),c=randInt(-5,5);
+    let exp=`(${formatInt(a)} + ${formatInt(b)}) × ${formatInt(c)}`;
+    let ans=(a+b)*c;
+    return{q:exp+" = ?",a:ans,hint:"Tính trong ngoặc trước"};
+  }
+
+  return{q:"5 + 7 = ?",a:12,hint:"Cộng hai số"};
+}
+
+// ==== GIAO DIỆN ====
+document.getElementById("startBtn").onclick=()=>{
+  user=document.getElementById("studentName").value.trim();
+  if(!user){alert("Nhập tên nhé!");return;}
+  localStorage.setItem("user",user);
+  document.getElementById("loginArea").style.display="none";
+  document.getElementById("mainArea").style.display="block";
+  loadLeaderboard();
+  showProblem(genProblem("int",2));
+};
+
+function showProblem(p){
+  window._cur=p;
+  document.getElementById("problemArea").style.display="block";
+  document.getElementById("qText").textContent=p.q;
+  document.getElementById("answer").value="";
+  document.getElementById("feedback").textContent="";
+  document.getElementById("hintText").textContent="";
+  let readQ=p.q.replace(/×/g," nhân ").replace(/÷/g," chia ").replace(/\+/g," cộng ").replace(/-/g," trừ ").replace(/\b-([0-9]+)/g," âm $1").replace(/\(/g," mở ngoặc ").replace(/\)/g," đóng ngoặc ");
+  speak("Bài toán là: "+readQ);
+}
+
+document.getElementById("gen").onclick=()=>{
+  let t=document.getElementById("topic").value;
+  let l=parseInt(document.getElementById("level").value);
+  showProblem(genProblem(t,l));
+};
+
+document.getElementById("check").onclick=()=>{
+  let ans=parseFloat(document.getElementById("answer").value);
+  if(isNaN(ans)){alert("Nhập số nhé!");return;}
+  let ok=Math.abs(ans-window._cur.a)<0.01;
+  if(ok){
+    correctSound.play();
+    document.getElementById("feedback").textContent="✅ Đúng rồi!";
+    document.body.style.background="#e6ffed";
+    speak("Đúng rồi, giỏi lắm!");
+  }else{
+    wrongSound.play();
+    let ansText=(window._cur.a+"").replace(/-/,"âm ");
+    document.getElementById("feedback").textContent=`❌ Sai, đáp án là: ${ansText}`;
+    document.body.style.background="#ffe6e6";
+    speak("Sai rồi, đáp án là "+ansText);
+  }
+  setTimeout(()=>document.body.style.background="linear-gradient(135deg,#dbeafe,#f0f9ff)",700);
+};
+
+document.getElementById("hintBtn").onclick=()=>{
+  document.getElementById("hintText").textContent=window._cur.hint;
+  speak("Gợi ý: "+window._cur.hint);
+};
+
+// ==== THI NHANH ====
+let state={i:0,score:0,qs:[],timer:null,rem:0};
+document.getElementById("startTest").onclick=()=>{
+  let topic=document.getElementById("topic").value;
+  let lvl=parseInt(document.getElementById("level").value);
+  state.i=0;state.score=0;state.qs=[];
+  for(let i=0;i<5;i++)state.qs.push(genProblem(topic,lvl));
+  document.getElementById("testArea").style.display="block";
+  nextQ();startTimer(60);
+};
+function nextQ(){
+  if(state.i>=5){endTest();return;}
+  let q=state.qs[state.i];
+  document.getElementById("testQ").textContent=`Câu ${state.i+1}: ${q.q}`;
+  document.getElementById("qn").textContent=state.i+1;
+  document.getElementById("testAns").value="";
+  let readQ=q.q.replace(/×/g," nhân ").replace(/÷/g," chia ").replace(/\+/g," cộng ").replace(/-/g," trừ ").replace(/\b-([0-9]+)/g," âm $1").replace(/\(/g," mở ngoặc ").replace(/\)/g," đóng ngoặc ");
+  speak("Câu số "+(state.i+1)+": "+readQ);
+}
+document.getElementById("nextQ").onclick=()=>{
+  let ans=parseFloat(document.getElementById("testAns").value);
+  let real=state.qs[state.i].a;
+  if(Math.abs(ans-real)<0.01){
+    state.score++;correctSound.play();speak("Đúng rồi!");
+  }else{
+    wrongSound.play();
+    let ansText=(real+"").replace(/-/,"âm ");
+    speak("Sai rồi, đáp án là "+ansText);
+  }
+  state.i++;nextQ();
+};
+function startTimer(sec){
+  state.rem=sec;document.getElementById("timer").textContent=state.rem;
+  if(state.timer)clearInterval(state.timer);
+  state.timer=setInterval(()=>{
+    state.rem--;document.getElementById("timer").textContent=state.rem;
+    if(state.rem<=0){clearInterval(state.timer);endTest();}
+  },1000);
+}
+function endTest(){
+  if(state.timer)clearInterval(state.timer);
+  document.getElementById("testFeedback").textContent=`Hoàn thành! Điểm: ${state.score}/5`;
+  saveResult(user,state.score);
+  speak("Hết giờ! Bạn được "+state.score+" điểm");
+}
+
+// ==== LƯU & BXH ====
+function saveResult(name,score){
+  const time=new Date().toLocaleString();
+  let data=JSON.parse(localStorage.getItem("results")||"[]");
+  data.push({name,score,time});
+  localStorage.setItem("results",JSON.stringify(data));
+  loadLeaderboard();
+}
+function loadLeaderboard(){
+  let body=document.getElementById("rankBody");
+  let data=JSON.parse(localStorage.getItem("results")||"[]");
+  let best={};
+  data.forEach(x=>{if(!best[x.name]||x.score>best[x.name].score)best[x.name]=x;});
+  let arr=Object.values(best).sort((a,b)=>b.score-a.score);
+  body.innerHTML=arr.map(r=>`<tr><td>${r.name}</td><td>${r.score}</td><td>${r.time}</td></tr>`).join("");
+}
+</script>
+</body>
+</html>
